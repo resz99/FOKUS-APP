@@ -6,12 +6,12 @@
 //  (data hanya tersimpan di browser ini, tanpa sinkron & notifikasi).
 // ===================================================================
 export const firebaseConfig = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
+  apiKey: 'AIzaSyBNMlQGtfoLCcThLpZK8kEGGg1X0Aj1h-g',
+  authDomain: 'fokus-app-rezz99.firebaseapp.com',
+  projectId: 'fokus-app-rezz99',
+  storageBucket: 'fokus-app-rezz99.firebasestorage.app',
+  messagingSenderId: '1077787950222',
+  appId: '1:1077787950222:web:287c56aab9833f72f49ddf',
 };
 
 // Cloud Messaging → Web Push certificates → "Key pair"
