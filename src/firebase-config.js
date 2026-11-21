@@ -15,6 +15,6 @@ export const firebaseConfig = {
 };
 
 // Cloud Messaging → Web Push certificates → "Key pair"
-export const vapidKey = '';
+export const vapidKey = 'BMd4Cw3RLongikHK6hiXZLpQnVGzT6QM_8FhFGb4W5OrFsi8l78c-H1S4FPGq5y_E6gTEcYLohb0_G1WfS6zXUQ';
 
 export const isFirebaseConfigured = Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
