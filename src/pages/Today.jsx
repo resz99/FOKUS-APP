@@ -5,6 +5,7 @@ import { todayKey, addDays, fmtLong, fmtShort, dayOfWeek, HARI_PENDEK } from '..
 import { ACCOUNTS } from '../lib/constants.js';
 import { Card, Empty, Modal, Field, Progress, toast, fmtMin } from '../components/ui.jsx';
 import { PostModal } from '../components/ContentForms.jsx';
+import CalendarModal from '../components/CalendarModal.jsx';
 
 export default function Today() {
   const today = todayKey();
@@ -122,22 +123,38 @@ function Quota({ today }) {
 }
 
 // ---------------- Tugas sekali jadi ----------------
+const byTime = (a, b) => (a.time || '99:99').localeCompare(b.time || '99:99');
+
+function TaskRowExtras({ t, onCal }) {
+  if (!t.time) return null;
+  return (
+    <button className={t.inCalendar ? 'cal-btn in' : 'cal-btn'} onClick={onCal} title="Tambah ke Kalender" aria-label="Tambah ke Kalender">
+      {t.inCalendar ? '📅✓' : '📅'}
+    </button>
+  );
+}
+
 function Tasks({ today }) {
   const { tasks, api } = useData();
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [calFor, setCalFor] = useState(null);
   const [stuck, setStuck] = useState(null);
   const [showUpcoming, setShowUpcoming] = useState(false);
   const once = tasks.filter((t) => t.type === 'once');
-  const active = once.filter((t) => !t.done && t.dueDate <= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const upcoming = once.filter((t) => !t.done && t.dueDate > today).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const active = once.filter((t) => !t.done && t.dueDate <= today)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || byTime(a, b));
+  const upcoming = once.filter((t) => !t.done && t.dueDate > today)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || byTime(a, b));
   const doneToday = once.filter((t) => t.done && t.doneDate === today);
 
   const complete = (t) => api.update('tasks', t.id, { done: true, doneDate: today });
   const undo = (t) => api.update('tasks', t.id, { done: false, doneDate: null });
   const postpone = (t) => {
     const n = (t.postponeCount || 0) + 1;
-    api.update('tasks', t.id, { dueDate: addDays(today, 1), postponeCount: n });
+    api.update('tasks', t.id, { dueDate: addDays(today, 1), postponeCount: n, inCalendar: false });
     if (n >= 3) toast('Tugas ini sudah ditunda 3x. Coba pecah jadi langkah kecil.', 'warn');
+    else if (t.inCalendar) toast('Ditunda ke besok. Jangan lupa ubah acaranya di Kalender iPhone.', 'info');
   };
 
   return (
@@ -148,22 +165,26 @@ function Tasks({ today }) {
           <li key={t.id} className={t.postponeCount >= 3 ? 'stuck' : ''}>
             <button className="check" onClick={() => complete(t)} aria-label="Tandai selesai" />
             <div className="grow">
-              <div>{t.title}</div>
+              <div className="task-title" onClick={() => setEditing(t)} role="button" tabIndex={0}>
+                {t.time && <span className="task-time">{t.time}</span>}{t.title}
+              </div>
               <div className="meta">
                 {t.dueDate < today && <span className="overdue">Terlambat sejak {fmtShort(t.dueDate)}</span>}
                 {t.postponeCount > 0 && <span>Ditunda {t.postponeCount}x</span>}
+                {t.time && (t.inCalendar ? <span>Pengingat: Kalender iPhone</span> : <span>Pengingat: notifikasi Fokus</span>)}
               </div>
               {t.postponeCount >= 3 && (
                 <button className="link-btn warn" onClick={() => setStuck(t)}>⚠ Sudah ditunda {t.postponeCount}x — atasi sekarang</button>
               )}
             </div>
+            <TaskRowExtras t={t} onCal={() => setCalFor(t)} />
             <button className="btn btn-ghost btn-sm" onClick={() => postpone(t)} title="Tunda ke besok">Besok →</button>
           </li>
         ))}
         {doneToday.map((t) => (
           <li key={t.id} className="done">
             <button className="check" aria-pressed="true" onClick={() => undo(t)} aria-label="Batalkan">✓</button>
-            <span className="grow">{t.title}</span>
+            <span className="grow">{t.time && <span className="task-time">{t.time}</span>}{t.title}</span>
           </li>
         ))}
       </ul>
@@ -175,14 +196,20 @@ function Tasks({ today }) {
           {showUpcoming && (
             <ul className="plainlist">
               {upcoming.map((t) => (
-                <li key={t.id}><span className="muted small">{fmtShort(t.dueDate)}</span> {t.title}
-                  <button className="icon-btn sm" aria-label="Hapus" onClick={() => api.remove('tasks', t.id)}>✕</button></li>
+                <li key={t.id}>
+                  <span className="muted small">{fmtShort(t.dueDate)}{t.time ? ` ${t.time}` : ''}</span>
+                  <span className="grow clickable" onClick={() => setEditing(t)}>{t.title}</span>
+                  <TaskRowExtras t={t} onCal={() => setCalFor(t)} />
+                  <button className="icon-btn sm" aria-label="Hapus" onClick={() => api.remove('tasks', t.id)}>✕</button>
+                </li>
               ))}
             </ul>
           )}
         </>
       )}
-      {adding && <TaskModal today={today} onClose={() => setAdding(false)} />}
+      {adding && <TaskModal today={today} onClose={() => setAdding(false)} onCreated={(t) => t.time && setCalFor(t)} />}
+      {editing && <TaskModal today={today} task={editing} onClose={() => setEditing(null)} onCreated={(t) => t.time && setCalFor(t)} />}
+      {calFor && <CalendarModal task={calFor} today={today} onClose={() => setCalFor(null)} />}
       {stuck && <StuckModal task={stuck} today={today} onClose={() => setStuck(null)} />}
     </Card>
   );
@@ -222,43 +249,89 @@ function StuckModal({ task, today, onClose }) {
   );
 }
 
-export function TaskModal({ today, onClose, defaultType = 'once' }) {
+export function TaskModal({ today, onClose, defaultType = 'once', task, onCreated }) {
   const { api } = useData();
-  const [type, setType] = useState(defaultType);
-  const [title, setTitle] = useState('');
-  const [due, setDue] = useState(today);
-  const [daysSel, setDaysSel] = useState([1, 2, 3, 4, 5]);
+  const [type, setType] = useState(task?.type || defaultType);
+  const [title, setTitle] = useState(task?.title || '');
+  const [due, setDue] = useState(task?.dueDate || today);
+  const [time, setTime] = useState(task?.time || '');
+  const [daysSel, setDaysSel] = useState(task?.days || [1, 2, 3, 4, 5]);
   const save = () => {
     if (!title.trim()) return toast('Isi nama tugas dulu', 'error');
-    if (type === 'once') api.add('tasks', { title: title.trim(), type, dueDate: due, done: false, postponeCount: 0 });
-    else {
-      if (!daysSel.length) return toast('Pilih minimal 1 hari', 'error');
-      api.add('tasks', { title: title.trim(), type, days: daysSel.sort(), active: true });
+    if (type === 'routine' && !daysSel.length) return toast('Pilih minimal 1 hari', 'error');
+    const data = type === 'once'
+      ? { title: title.trim(), type, dueDate: due, time: time || null }
+      : { title: title.trim(), type, days: [...daysSel].sort(), time: time || null, active: true };
+    if (task) {
+      const scheduleChanged = task.time !== data.time || (type === 'once' ? task.dueDate !== due : String(task.days) !== String(data.days));
+      if (scheduleChanged && task.inCalendar) {
+        data.inCalendar = false;
+        toast('Jadwal berubah — hapus acara lama di Kalender iPhone, lalu tambahkan lagi.', 'warn');
+      }
+      if (scheduleChanged) data.remindedOn = null;
+      api.update('tasks', task.id, data);
+      onClose();
+      if (scheduleChanged && data.time && onCreated) onCreated({ ...task, ...data });
+      return;
     }
+    const extra = type === 'once' ? { done: false, postponeCount: 0 } : {};
+    const p = api.add('tasks', { ...data, ...extra, inCalendar: false });
+    onClose();
+    if (data.time && onCreated && p?.id) onCreated({ id: p.id, ...data, ...extra, inCalendar: false });
+  };
+  const remove = () => {
+    if (!confirm('Hapus tugas ini?')) return;
+    api.remove('tasks', task.id);
+    if (task.inCalendar) toast('Tugas dihapus. Hapus juga acaranya di Kalender iPhone.', 'info');
     onClose();
   };
   return (
-    <Modal title="Tambah Tugas" onClose={onClose}
-      footer={<><button className="btn" onClick={onClose}>Batal</button><button className="btn btn-primary" onClick={save}>Simpan</button></>}>
-      <div className="segmented">
-        <button className={type === 'once' ? 'active' : ''} onClick={() => setType('once')}>Sekali jadi</button>
-        <button className={type === 'routine' ? 'active' : ''} onClick={() => setType('routine')}>Rutinitas</button>
-      </div>
-      <Field label="Nama tugas"><input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus
-        placeholder={type === 'once' ? 'mis. Kirim laporan progres proyek' : 'mis. Minum air 2 liter'} onKeyDown={(e) => e.key === 'Enter' && save()} /></Field>
-      {type === 'once' ? (
-        <Field label="Tanggal"><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></Field>
-      ) : (
-        <Field label="Ulangi setiap">
-          <div className="chips">
-            {[1, 2, 3, 4, 5, 6, 0].map((d) => (
-              <button type="button" key={d} className={daysSel.includes(d) ? 'chip active' : 'chip'}
-                onClick={() => setDaysSel((s) => (s.includes(d) ? s.filter((x) => x !== d) : [...s, d]))}>{HARI_PENDEK[d]}</button>
-            ))}
-          </div>
-        </Field>
+    <Modal title={task ? 'Edit Tugas' : 'Tambah Tugas'} onClose={onClose}
+      footer={<>
+        {task && <button className="btn btn-danger" onClick={remove}>Hapus</button>}
+        <span className="grow" />
+        <button className="btn" onClick={onClose}>Batal</button>
+        <button className="btn btn-primary" onClick={save}>Simpan</button>
+      </>}>
+      {!task && (
+        <div className="segmented">
+          <button className={type === 'once' ? 'active' : ''} onClick={() => setType('once')}>Sekali jadi</button>
+          <button className={type === 'routine' ? 'active' : ''} onClick={() => setType('routine')}>Rutinitas</button>
+        </div>
       )}
+      <Field label="Nama tugas"><input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus={!task}
+        placeholder={type === 'once' ? 'mis. Meeting progres proyek' : 'mis. Olahraga pagi'} onKeyDown={(e) => e.key === 'Enter' && save()} /></Field>
+      {type === 'once' ? (
+        <div className="row2">
+          <Field label="Tanggal"><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></Field>
+          <Field label="Jam (opsional)"><TimeInput value={time} onChange={setTime} /></Field>
+        </div>
+      ) : (
+        <>
+          <Field label="Ulangi setiap">
+            <div className="chips">
+              {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+                <button type="button" key={d} className={daysSel.includes(d) ? 'chip active' : 'chip'}
+                  onClick={() => setDaysSel((s) => (s.includes(d) ? s.filter((x) => x !== d) : [...s, d]))}>{HARI_PENDEK[d]}</button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Jam (opsional)"><TimeInput value={time} onChange={setTime} /></Field>
+        </>
+      )}
+      <p className="muted small">{time
+        ? '⏰ Tugas berjam bisa ditambahkan ke Kalender iPhone agar pengingatnya berbunyi tepat waktu.'
+        : 'Isi jam bila tugas ini perlu pengingat.'}</p>
     </Modal>
+  );
+}
+
+function TimeInput({ value, onChange }) {
+  return (
+    <div className="time-input">
+      <input type="time" value={value} onChange={(e) => onChange(e.target.value)} />
+      {value && <button type="button" className="icon-btn sm" aria-label="Hapus jam" onClick={() => onChange('')}>✕</button>}
+    </div>
   );
 }
 
@@ -267,9 +340,11 @@ function Routines({ today }) {
   const { tasks, days, api } = useData();
   const [adding, setAdding] = useState(false);
   const [manage, setManage] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [calFor, setCalFor] = useState(null);
   const dow = dayOfWeek(today);
   const routines = tasks.filter((t) => t.type === 'routine' && t.active !== false);
-  const todays = routines.filter((t) => (t.days || []).includes(dow));
+  const todays = routines.filter((t) => (t.days || []).includes(dow)).sort(byTime);
   const doneMap = days[today]?.routineDone || {};
   const toggle = (t) => saveDay(api, days, today, { routineDone: { ...doneMap, [t.id]: !doneMap[t.id] } });
   const count = todays.filter((t) => doneMap[t.id]).length;
@@ -286,19 +361,24 @@ function Routines({ today }) {
             {todays.map((t) => (
               <li key={t.id} className={doneMap[t.id] ? 'done' : ''}>
                 <button className="check" aria-pressed={!!doneMap[t.id]} onClick={() => toggle(t)} aria-label="Tandai">{doneMap[t.id] ? '✓' : ''}</button>
-                <span className="grow">{t.title}</span>
+                <span className="grow task-title" onClick={() => setEditing(t)} role="button" tabIndex={0}>
+                  {t.time && <span className="task-time">{t.time}</span>}{t.title}
+                </span>
+                <TaskRowExtras t={t} onCal={() => setCalFor(t)} />
               </li>
             ))}
           </ul>
         </>
       )}
-      {adding && <TaskModal today={today} defaultType="routine" onClose={() => setAdding(false)} />}
+      {adding && <TaskModal today={today} defaultType="routine" onClose={() => setAdding(false)} onCreated={(t) => t.time && setCalFor(t)} />}
+      {editing && <TaskModal today={today} task={editing} onClose={() => setEditing(null)} onCreated={(t) => t.time && setCalFor(t)} />}
+      {calFor && <CalendarModal task={calFor} today={today} onClose={() => setCalFor(null)} />}
       {manage && (
         <Modal title="Kelola Rutinitas" onClose={() => setManage(false)}>
           <ul className="plainlist">
             {routines.map((t) => (
               <li key={t.id}>
-                <span className="grow">{t.title}<br /><span className="muted small">{(t.days || []).map((d) => HARI_PENDEK[d]).join(', ')}</span></span>
+                <span className="grow clickable" onClick={() => { setManage(false); setEditing(t); }}>{t.title}<br /><span className="muted small">{(t.days || []).map((d) => HARI_PENDEK[d]).join(', ')}{t.time ? ` · ${t.time}` : ''}{t.inCalendar ? ' · 📅' : ''}</span></span>
                 <button className="btn btn-danger btn-sm" onClick={() => api.remove('tasks', t.id)}>Hapus</button>
               </li>
             ))}

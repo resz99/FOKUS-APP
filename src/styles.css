@@ -272,3 +272,14 @@ i.ring { border: 1.5px solid var(--dc, var(--muted)); }
 /* ---------- Login ---------- */
 .login { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; }
 .login p { color: var(--muted); max-width: 340px; margin: 0 0 10px; }
+
+/* ---------- Tugas berjam & kalender ---------- */
+.task-title { cursor: pointer; }
+.task-time { display: inline-block; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--accent); margin-right: 8px; }
+.cal-btn { border: 1px solid var(--line); background: transparent; border-radius: 8px; padding: 4px 7px; font-size: 14px; cursor: pointer; flex: none; line-height: 1.2; }
+.cal-btn.in { border-color: color-mix(in srgb, var(--success) 50%, var(--line)); background: color-mix(in srgb, var(--success) 12%, transparent); font-size: 12px; }
+.time-input { display: flex; align-items: center; gap: 4px; }
+.cal-event { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 10px; background: var(--surface-2); border-left: 3px solid var(--accent); }
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.modal-body > .btn { align-self: stretch; }

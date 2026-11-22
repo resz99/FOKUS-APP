@@ -51,3 +51,12 @@ export function buildMessage(type, data, today) {
   };
 }
 
+
+export function taskMessage(task) {
+  return {
+    title: `⏰ ${task.time} · ${task.title}`,
+    body: task.type === 'routine'
+      ? 'Waktunya rutinitas ini. Centang di Fokus kalau sudah selesai.'
+      : 'Waktunya mengerjakan tugas ini. Centang di Fokus kalau sudah selesai.',
+  };
+}

@@ -1,22 +1,26 @@
 name: Kirim pengingat
 
+# Dicek setiap 15 menit. Jam notifikasi pagi & malam diatur dari menu Pengaturan di aplikasi.
 on:
   schedule:
-    - cron: '0 1 * * *'    # 08.00 WIB — 3 prioritas & kuota konten
-    - cron: '0 16 * * *'   # 23.00 WIB — evaluasi harian
-    - cron: '0 13 * * 0'   # Minggu 20.00 WIB — ringkasan mingguan
+    - cron: '1,16,31,46 * * * *'
   workflow_dispatch:
     inputs:
       jenis:
-        description: 'Jenis pengingat (untuk tes)'
+        description: 'auto = jalankan seperti jadwal biasa; lainnya = kirim tes sekarang'
         required: true
-        default: pagi
+        default: auto
         type: choice
-        options: [pagi, malam, mingguan]
+        options: [auto, pagi, malam, mingguan, tugas]
+
+concurrency:
+  group: pengingat
+  cancel-in-progress: false
 
 jobs:
   send:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       TZ: Asia/Jakarta
     steps:
@@ -26,19 +30,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Tentukan jenis pengingat
-        id: jenis
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "value=${{ inputs.jenis }}" >> "$GITHUB_OUTPUT"
-          else
-            case "${{ github.event.schedule }}" in
-              "0 1 * * *")  echo "value=pagi" >> "$GITHUB_OUTPUT" ;;
-              "0 16 * * *") echo "value=malam" >> "$GITHUB_OUTPUT" ;;
-              "0 13 * * 0") echo "value=mingguan" >> "$GITHUB_OUTPUT" ;;
-            esac
-          fi
-      - run: node scripts/send-reminders.mjs ${{ steps.jenis.outputs.value }}
+      - run: node scripts/send-reminders.mjs ${{ inputs.jenis || 'auto' }}
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           APP_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/

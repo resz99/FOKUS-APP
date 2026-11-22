@@ -2,11 +2,11 @@
 //  - Firestore (data tersinkron di semua perangkat)
 //  - Lokal / Mode Demo (localStorage, hanya di browser ini)
 import {
-  collection, doc, onSnapshot, addDoc, updateDoc, setDoc, deleteDoc, getDoc,
+  collection, doc, onSnapshot, updateDoc, setDoc, deleteDoc, getDoc,
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 
-export const COLLECTIONS = ['goals', 'contents', 'tasks', 'days', 'workouts', 'weights'];
+export const COLLECTIONS = ['goals', 'contents', 'tasks', 'days', 'workouts', 'weights', 'meta'];
 
 export function firestoreBackend(uid) {
   const col = (name) => collection(db, 'users', uid, name);
@@ -16,7 +16,13 @@ export function firestoreBackend(uid) {
     subscribe(name, cb, onError) {
       return onSnapshot(col(name), (snap) => cb(snap.docs.map((d) => ({ id: d.id, ...d.data() }))), onError);
     },
-    add: (name, data) => addDoc(col(name), { ...data, createdAt: Date.now() }),
+    // ID dibuat langsung di perangkat → langsung tersedia walau offline
+    add(name, data) {
+      const r = doc(col(name));
+      const write = setDoc(r, { ...data, createdAt: Date.now() }).then(() => ({ id: r.id }));
+      write.id = r.id;
+      return write;
+    },
     update: (name, id, data) => updateDoc(ref(name, id), data),
     put: (name, id, data) => setDoc(ref(name, id), data),
     remove: (name, id) => deleteDoc(ref(name, id)),
@@ -47,7 +53,14 @@ export function localBackend() {
       cb(list(name));
       return () => { listeners[name] = listeners[name].filter((x) => x !== cb); };
     },
-    async add(name, data) { const id = newId(); bucket(name)[id] = { ...data, createdAt: Date.now() }; save(name); return { id }; },
+    add(name, data) {
+      const id = newId();
+      bucket(name)[id] = { ...data, createdAt: Date.now() };
+      save(name);
+      const p = Promise.resolve({ id });
+      p.id = id;
+      return p;
+    },
     async update(name, id, data) { bucket(name)[id] = { ...bucket(name)[id], ...data }; save(name); },
     async put(name, id, data) { bucket(name)[id] = { ...data }; save(name); },
     async remove(name, id) { delete bucket(name)[id]; save(name); },

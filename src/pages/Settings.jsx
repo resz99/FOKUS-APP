@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useData } from '../lib/store.jsx';
 import { enablePush, pushStatus } from '../lib/push.js';
 import { doLogout } from '../App.jsx';
-import { Card, toast } from '../components/ui.jsx';
+import { Card, Field, toast } from '../components/ui.jsx';
 import { COLLECTIONS } from '../lib/backend.js';
 import { todayKey } from '../lib/dates.js';
 
@@ -23,6 +23,11 @@ export default function Settings({ user }) {
       setStatus(pushStatus());
     } finally { setBusy(false); }
   };
+  const saveSetting = (key, value) => {
+    const { id, ...cur } = data.settings;
+    data.api.put('meta', 'settings', { ...cur, [key]: value });
+    toast(`Jam notifikasi diubah ke ${value}`, 'success');
+  };
   const changeTheme = (t) => {
     setTheme(t);
     document.documentElement.dataset.theme = t;
@@ -31,8 +36,10 @@ export default function Settings({ user }) {
   const exportData = () => {
     const out = {};
     COLLECTIONS.forEach((c) => {
+      if (c === 'meta') return;
       out[c] = c === 'days' ? Object.values(data.days) : c === 'goals' ? [...data.goals, ...data.archivedGoals] : data[c];
     });
+    out.settings = data.settings;
     const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -56,10 +63,18 @@ export default function Settings({ user }) {
         </Card>
 
         <Card title="Notifikasi">
+          <div className="row2">
+            <Field label="☀️ 3 Prioritas & kuota">
+              <TimeSelect value={data.settings.morningTime} onChange={(v) => saveSetting('morningTime', v)} />
+            </Field>
+            <Field label="🌙 Evaluasi harian">
+              <TimeSelect value={data.settings.eveningTime} onChange={(v) => saveSetting('eveningTime', v)} />
+            </Field>
+          </div>
           <ul className="tips">
-            <li><b>08.00</b> — Tentukan 3 prioritas + kuota konten hari ini</li>
-            <li><b>23.00</b> — Evaluasi harian (dilewati bila sudah diisi)</li>
             <li><b>Minggu 20.00</b> — Ringkasan mingguan + pengingat timbang</li>
+            <li><b>Tugas berjam</b> — diingatkan di jamnya, kecuali yang sudah masuk Kalender iPhone</li>
+            <li>Evaluasi tidak dikirim bila sudah diisi. Notifikasi bisa telat ±5–20 menit.</li>
           </ul>
           {status === 'granted' && <p className="small success-text">✓ Notifikasi aktif di perangkat ini.</p>}
           {status === 'denied' && <p className="small danger-text">Izin notifikasi diblokir. Buka pengaturan situs di browser → izinkan Notifikasi, lalu tekan tombol di bawah.</p>}
@@ -86,5 +101,14 @@ export default function Settings({ user }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+const TIMES = Array.from({ length: 96 }, (_, i) => `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`);
+function TimeSelect({ value, onChange }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}>
+      {TIMES.map((t) => <option key={t} value={t}>{t.replace(':', '.')}</option>)}
+    </select>
   );
 }

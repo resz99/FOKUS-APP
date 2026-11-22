@@ -76,12 +76,13 @@ Buka `https://USERNAME.github.io/fokus-app/`, lalu login dengan Google.
 Di **setiap perangkat**, buka **Pengaturan → Aktifkan notifikasi di perangkat ini**.
 
 ## Langkah 5: Tes notifikasi
-Repo → tab **Actions → Kirim pengingat → Run workflow →** pilih `pagi`, lalu **Run**. Dalam ±1 menit notifikasi akan masuk.
+Repo → tab **Actions → Kirim pengingat → Run workflow →** pilih `pagi` (atau `tugas` untuk tes pengingat tugas), lalu **Run**. Dalam ±1 menit notifikasi akan masuk.
 
 ---
 
 ## Catatan penting
 - **Notifikasi bisa telat 5–20 menit.** Jadwal GitHub Actions kadang tertunda saat server sedang ramai.
 - **Jadwal otomatis GitHub berhenti kalau repo tidak ada aktivitas selama 60 hari.** GitHub akan mengirim email peringatan. Cukup buka tab Actions lalu klik **Enable workflow**.
-- Jam pengingat bisa diubah di `.github/workflows/reminders.yml`. Formatnya UTC, jadi WIB − 7 jam.
+- Jam notifikasi pagi & malam diatur dari **Pengaturan** di aplikasi. GitHub mengecek setiap 15 menit.
+- **Tugas berjam** diingatkan lewat notifikasi Fokus, kecuali yang sudah ditambahkan ke Kalender iPhone (tombol 📅). Untuk tugas penting, pakai Kalender karena tepat waktu dan berbunyi.
 - **Mode Demo:** selama `src/firebase-config.js` masih kosong, aplikasi tetap bisa dicoba, tapi data hanya tersimpan di browser itu.

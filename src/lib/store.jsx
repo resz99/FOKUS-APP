@@ -58,6 +58,7 @@ export function DataProvider({ backend, children }) {
       days,
       workouts: get('workouts'),
       weights: get('weights').sort((a, b) => a.date.localeCompare(b.date)),
+      settings: { morningTime: '08:00', eveningTime: '23:00', ...(get('meta').find((m) => m.id === 'settings') || {}) },
       api,
     };
   }, [data, api]);
