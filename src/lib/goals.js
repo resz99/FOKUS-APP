@@ -18,7 +18,7 @@ export function latestWeight(weights, today = todayKey()) {
 
 export function weekWorkout(workouts, key = todayKey()) {
   const days = weekDays(key);
-  const list = workouts.filter((w) => w.date >= days[0] && w.date <= days[6]);
+  const list = workouts.filter((w) => !w.hidden && w.date >= days[0] && w.date <= days[6]);
   return {
     minutes: list.reduce((s, w) => s + (Number(w.minutes) || 0), 0),
     strength: list.filter((w) => w.strength).length,

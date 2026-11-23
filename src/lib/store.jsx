@@ -56,9 +56,10 @@ export function DataProvider({ backend, children }) {
       contents: get('contents'),
       tasks: get('tasks'),
       days,
-      workouts: get('workouts'),
+      workouts: get('workouts').filter((w) => !w.hidden),
       weights: get('weights').sort((a, b) => a.date.localeCompare(b.date)),
       settings: { morningTime: '08:00', eveningTime: '23:00', ...(get('meta').find((m) => m.id === 'settings') || {}) },
+      strava: get('meta').find((m) => m.id === 'strava') || null,
       api,
     };
   }, [data, api]);

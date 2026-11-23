@@ -5,6 +5,7 @@ import { isFirebaseConfigured } from './firebase-config.js';
 import { firestoreBackend, localBackend } from './lib/backend.js';
 import { DataProvider, useData } from './lib/store.jsx';
 import { listenForeground } from './lib/push.js';
+import { handleStravaCallback } from './lib/strava.js';
 import { Toasts, toast } from './components/ui.jsx';
 import Today from './pages/Today.jsx';
 import Goals from './pages/Goals.jsx';
@@ -62,7 +63,8 @@ export default function App() {
 
 function Shell({ user }) {
   const route = useHashRoute();
-  const { loading } = useData();
+  const { loading, api } = useData();
+  useEffect(() => { handleStravaCallback(api, toast); }, [api]);
   const page = route === 'pengaturan'
     ? { id: 'pengaturan', Comp: Settings }
     : PAGES.find((p) => p.id === route) || PAGES[0];

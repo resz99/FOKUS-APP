@@ -283,3 +283,27 @@ i.ring { border: 1.5px solid var(--dc, var(--muted)); }
 .steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .modal-body > .btn { align-self: stretch; }
+
+/* ---------- Aktivitas olahraga ---------- */
+.activity-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.activity-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.activity-row:last-child { border-bottom: 0; }
+.activity-row:hover .activity-name { color: var(--accent); }
+.activity-icon { width: 34px; height: 34px; border-radius: 10px; background: var(--surface-2); display: grid; place-items: center; font-size: 18px; flex: none; }
+.activity-name { font-weight: 600; }
+.strava-badge { font-size: 11px; font-weight: 700; color: #fc5200; border: 1px solid color-mix(in srgb, #fc5200 50%, transparent); padding: 2px 6px; border-radius: 6px; flex: none; }
+.strava-link { color: #fc5200; font-weight: 600; }
+.btn-strava { background: #fc5200; border-color: #fc5200; color: #fff; align-self: flex-start; }
+.btn-strava:hover { filter: brightness(1.08); border-color: #fc5200; }
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 8px; }
+.stat-sm { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+.route-map { width: 100%; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--surface-2); z-index: 0; }
+:root:not([data-theme="light"]) .route-map .leaflet-tile-pane { filter: brightness(.75) contrast(1.1) saturate(.8); }
+.route-map .leaflet-control-attribution { font-size: 9px; background: rgba(0,0,0,.45); color: #ddd; }
+.route-map .leaflet-control-attribution a { color: #fff; }
+.workout-photo { width: 100%; max-height: 420px; object-fit: contain; border-radius: 12px; background: var(--surface-2); }
+.photo-field { display: flex; flex-direction: column; gap: 8px; }
+.more-fields { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.more-fields summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); }
+.more-fields[open] summary { margin-bottom: 12px; }
+.more-fields .row2 + .row2 { margin-top: 12px; }

@@ -5,7 +5,12 @@ export const ACCOUNTS = {
 };
 export const ACCOUNT_KEYS = Object.keys(ACCOUNTS);
 
-export const WORKOUT_TYPES = ['Jalan cepat', 'Lari', 'Bersepeda', 'Renang', 'Latihan otot / Gym', 'Olahraga lain'];
+export const WORKOUT_TYPES = ['Jalan cepat', 'Lari', 'Sepak bola', 'Bersepeda', 'Renang', 'Latihan otot / Gym', 'Olahraga lain'];
+export const WORKOUT_ICON = {
+  'Jalan cepat': '🚶', Lari: '🏃', 'Sepak bola': '⚽', Bersepeda: '🚴', Renang: '🏊', 'Latihan otot / Gym': '🏋️', 'Olahraga lain': '🤸',
+};
+// Jenis yang menampilkan pace (menit/km); lainnya menampilkan kecepatan (km/jam)
+export const PACE_TYPES = ['Jalan cepat', 'Lari'];
 
 export const DELAY_REASONS = ['Lupa', 'Menunda', 'Terlalu banyak tugas', 'Capek', 'Ada urusan mendadak', 'Lainnya'];
 
