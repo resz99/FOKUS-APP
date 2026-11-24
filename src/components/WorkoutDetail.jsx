@@ -56,7 +56,9 @@ export default function WorkoutDetail({ workout: w, onClose }) {
     [w.type === 'Lari' || w.type === 'Jalan cepat' ? 'Pace' : 'Kecepatan', fmtPaceOrSpeed(w)],
     ['❤️ Rata-rata', w.avgHr ? `${w.avgHr} bpm` : null],
     ['❤️ Maks', w.maxHr ? `${w.maxHr} bpm` : null],
-    ['🔥 Kalori', w.calories ? `${w.calories} kkal` : null],
+    ['🔥 Kalori aktif', w.calories ? `${w.calories} kkal` : null],
+    ['🔥 Kalori total', w.caloriesTotal ? `${w.caloriesTotal} kkal` : null],
+    ['👟 Langkah', w.steps ? w.steps.toLocaleString('id-ID') : null],
     ['⛰️ Elevasi', w.elevationM ? `${w.elevationM} m` : null],
   ].filter(([, v]) => v);
   const addPhoto = async (img) => {

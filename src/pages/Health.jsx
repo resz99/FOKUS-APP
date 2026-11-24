@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useData } from '../lib/store.jsx';
 import { analyze, weekWorkout, latestWeight } from '../lib/goals.js';
 import { todayKey, weekStart, addDays, fmtShort } from '../lib/dates.js';
@@ -8,6 +8,7 @@ import { stravaConfigured, stravaAuthorizeUrl } from '../lib/strava.js';
 import { Card, Modal, Field, Progress, Empty, toast, fmtMin } from '../components/ui.jsx';
 import { BarChart, LineChart } from '../components/Charts.jsx';
 import WorkoutDetail, { PhotoPicker, savePhoto } from '../components/WorkoutDetail.jsx';
+import { compressImage } from '../lib/image.js';
 
 const sortW = (a, b) => b.date.localeCompare(a.date) || (b.startTime || '').localeCompare(a.startTime || '');
 
@@ -23,6 +24,7 @@ export default function Health() {
   const wk = weekWorkout(workouts, today);
   const weekKm = wk.list.reduce((s, w) => s + (w.distanceM || 0), 0);
   const weekKcal = wk.list.reduce((s, w) => s + (w.calories || 0), 0);
+  const weekSteps = wk.list.reduce((s, w) => s + (w.steps || 0), 0);
   const weightGoals = goals.filter((g) => g.kind === 'weight');
   const lw = latestWeight(weights, today);
   const weighedThisWeek = weights.some((w) => w.date >= weekStart(today));
@@ -52,7 +54,8 @@ export default function Health() {
               <div><div className="stat">{fmtMin(wk.minutes)}</div><div className="muted small">dari {fmtMin(a.targetMin)}</div></div>
               <div><div className="stat">{wk.strength}/{a.targetStr}</div><div className="muted small">latihan otot</div></div>
               {weekKm > 0 && <div><div className="stat">{fmtKm(weekKm)}</div><div className="muted small">jarak</div></div>}
-              {weekKcal > 0 && <div><div className="stat">{weekKcal.toLocaleString('id-ID')}</div><div className="muted small">kkal</div></div>}
+              {weekKcal > 0 && <div><div className="stat">{weekKcal.toLocaleString('id-ID')}</div><div className="muted small">kkal aktif</div></div>}
+              {weekSteps > 0 && <div><div className="stat">{weekSteps.toLocaleString('id-ID')}</div><div className="muted small">langkah olahraga</div></div>}
               <div><div className="stat">🔥 {a.streak}</div><div className="muted small">minggu berturut</div></div>
             </div>
             <Progress value={a.pct} color="var(--c-health)" />
@@ -112,7 +115,7 @@ export default function Health() {
 }
 
 function ActivityRow({ w, onOpen }) {
-  const bits = [fmtMin(w.minutes), fmtKm(w.distanceM), fmtPaceOrSpeed(w), w.avgHr && `❤️ ${w.avgHr}`, w.calories && `🔥 ${w.calories}`].filter(Boolean);
+  const bits = [fmtMin(w.minutes), fmtKm(w.distanceM), fmtPaceOrSpeed(w), w.avgHr && `❤️ ${w.avgHr}`, w.calories && `🔥 ${w.calories}`, w.steps && `👟 ${w.steps.toLocaleString('id-ID')}`].filter(Boolean);
   return (
     <li className="activity-row" onClick={onOpen} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen()}>
       <span className="activity-icon">{WORKOUT_ICON[w.type] || '🤸'}</span>
@@ -126,19 +129,14 @@ function ActivityRow({ w, onOpen }) {
       {w.photoId && <span title="Ada foto">📷</span>}
       {w.polyline && <span title="Ada peta rute">🗺️</span>}
       {w.source === 'strava' && <span className="strava-badge">Strava</span>}
+      {w.source === 'screenshot' && <span className="src-badge" title="Diisi dari screenshot">📸</span>}
     </li>
   );
 }
 
 function StravaCard() {
   const { strava, api } = useData();
-  if (!stravaConfigured) {
-    return (
-      <Card title="Strava">
-        <p className="small muted">Sinkron otomatis dari Strava belum diaktifkan (Client ID Strava belum dipasang).</p>
-      </Card>
-    );
-  }
+  if (!stravaConfigured) return null; // Strava API butuh langganan; kartu disembunyikan
   const status = strava?.status || 'none';
   const connect = () => {
     if (api.mode === 'demo') return toast('Strava hanya bisa disambungkan di mode cloud.', 'error');
@@ -176,18 +174,69 @@ function StravaCard() {
 }
 
 function WorkoutModal({ today, onClose }) {
-  const { api } = useData();
-  const [f, setF] = useState({ date: today, startTime: '', type: WORKOUT_TYPES[0], minutes: 30, strength: false, km: '', avgHr: '', calories: '' });
+  const { api, workouts } = useData();
+  const [f, setF] = useState({ date: today, startTime: '', type: WORKOUT_TYPES[0], minutes: 30, strength: false, km: '', avgHr: '', calories: '', steps: '' });
+  const [extra, setExtra] = useState({}); // data tambahan dari screenshot: sec, elevationM, caloriesTotal, maxHr
   const [img, setImg] = useState(null);
-  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const [auto, setAuto] = useState(() => new Set());
+  const [showMore, setShowMore] = useState(false);
+  const [ocr, setOcr] = useState(null); // { busy, msg, found, warn }
+  const set = (k) => (e) => {
+    setF((x) => ({ ...x, [k]: e.target.value }));
+    setAuto((a) => { const n = new Set(a); n.delete(k); return n; });
+  };
+  const cls = (k) => (auto.has(k) ? 'autofilled' : undefined);
+
+  const fromScreenshot = async (file) => {
+    setOcr({ busy: true, msg: 'Menyiapkan pembaca…' });
+    compressImage(file).then(setImg).catch(() => {});
+    try {
+      const { readWorkoutScreenshot } = await import('../lib/ocr.js');
+      const { fields: r } = await readWorkoutScreenshot(file, (m) => {
+        const pct = m.progress ? ` ${Math.round(m.progress * 100)}%` : '';
+        const msg = m.status === 'recognizing text' ? `Membaca angka…${pct}` : 'Menyiapkan pembaca (pertama kali agak lama)…';
+        setOcr((o) => (o && o.busy ? { ...o, msg } : o));
+      });
+      const patch = {};
+      if (r.type) { patch.type = r.type; if (r.type.startsWith('Latihan otot')) patch.strength = true; }
+      if (r.date) patch.date = r.date;
+      if (r.startTime) patch.startTime = r.startTime;
+      if (r.sec) patch.minutes = Math.max(1, Math.round(r.sec / 60));
+      if (r.distanceM) patch.km = String(Math.round(r.distanceM) / 1000).replace('.', ',');
+      if (r.avgHr) patch.avgHr = r.avgHr;
+      if (r.calories) patch.calories = r.calories;
+      if (r.steps) patch.steps = r.steps;
+      const keys = Object.keys(patch).filter((k) => k !== 'strength');
+      setF((x) => ({ ...x, ...patch }));
+      setExtra({ sec: r.sec || null, elevationM: r.elevationM || null, caloriesTotal: r.caloriesTotal || null, maxHr: r.maxHr || null });
+      setAuto(new Set(keys));
+      if (keys.some((k) => ['km', 'avgHr', 'calories', 'steps', 'startTime'].includes(k))) setShowMore(true);
+      const dup = r.date && workouts.find((w) => w.date === r.date && (!r.startTime || !w.startTime || w.startTime === r.startTime) && w.type === (r.type || w.type));
+      setOcr({
+        busy: false,
+        found: keys.length,
+        noType: !r.type,
+        warn: dup ? `Sepertinya aktivitas ini sudah pernah dicatat (${fmtShort(dup.date)}${dup.startTime ? ' ' + dup.startTime : ''}).` : null,
+      });
+    } catch (e) {
+      setOcr({ busy: false, found: 0, error: 'Gagal membaca screenshot: ' + e.message });
+    }
+  };
+
   const save = () => {
     if (!(Number(f.minutes) > 0)) return toast('Isi durasi', 'error');
     const km = Number(String(f.km).replace(',', '.'));
+    const sec = extra.sec && Math.round(extra.sec / 60) === Number(f.minutes) ? extra.sec : null;
     const data = {
-      source: 'manual', date: f.date, startTime: f.startTime || null, type: f.type, minutes: Number(f.minutes), strength: f.strength,
+      source: auto.size ? 'screenshot' : 'manual', date: f.date, startTime: f.startTime || null, type: f.type, minutes: Number(f.minutes), strength: f.strength,
+      movingSec: sec,
       distanceM: km > 0 ? Math.round(km * 1000) : null,
       avgHr: Number(f.avgHr) > 0 ? Number(f.avgHr) : null,
+      maxHr: extra.maxHr || null,
       calories: Number(f.calories) > 0 ? Number(f.calories) : null,
+      caloriesTotal: extra.caloriesTotal || null,
+      steps: Number(f.steps) > 0 ? Number(f.steps) : null,
+      elevationM: extra.elevationM || null,
     };
     const p = api.add('workouts', data);
     if (img) savePhoto(api, p.id, img);
@@ -197,36 +246,63 @@ function WorkoutModal({ today, onClose }) {
   return (
     <Modal title="Catat Olahraga" onClose={onClose}
       footer={<><button className="btn" onClick={onClose}>Batal</button><button className="btn btn-primary" onClick={save}>Simpan</button></>}>
+      <div className="ocr-box">
+        <ScreenshotPicker onPicked={fromScreenshot} busy={ocr?.busy} />
+        {ocr?.busy && <p className="small muted ocr-status"><span className="spinner" /> {ocr.msg}</p>}
+        {ocr && !ocr.busy && !ocr.error && (ocr.found
+          ? <p className="small success-text">✓ {ocr.found} data terbaca otomatis. Cek kolom yang ditandai sebelum menyimpan.</p>
+          : <p className="small danger-text">Tidak ada angka yang terbaca. Isi manual ya, screenshot tetap dilampirkan.</p>)}
+        {ocr && !ocr.busy && ocr.found > 0 && ocr.noType && <p className="small warn-text">⚠ Jenis olahraga tidak tercantum di screenshot. Pilih jenisnya di bawah.</p>}
+        {ocr?.warn && <p className="small warn-text">⚠ {ocr.warn}</p>}
+        {ocr?.error && <p className="small danger-text">{ocr.error}</p>}
+        {!ocr && <p className="small muted">Huawei Health atau Strava (ringkasan aktivitas / stiker share). Dibaca langsung di HP-mu.</p>}
+      </div>
       <Field label="Jenis">
-        <div className="chips">
+        <div className={`chips ${cls('type') || ''}`}>
           {WORKOUT_TYPES.map((t) => (
             <button type="button" key={t} className={f.type === t ? 'chip active' : 'chip'}
-              onClick={() => setF((x) => ({ ...x, type: t, strength: t.startsWith('Latihan otot') ? true : x.strength }))}>{WORKOUT_ICON[t]} {t}</button>
+              onClick={() => { setAuto((a) => { const n = new Set(a); n.delete('type'); return n; }); setF((x) => ({ ...x, type: t, strength: t.startsWith('Latihan otot') ? true : x.strength })); }}>{WORKOUT_ICON[t]} {t}</button>
           ))}
         </div>
       </Field>
       <div className="row2">
-        <Field label="Durasi (menit)"><input type="number" min="1" inputMode="numeric" value={f.minutes} onChange={set('minutes')} /></Field>
-        <Field label="Tanggal"><input type="date" value={f.date} onChange={set('date')} /></Field>
+        <Field label="Durasi (menit)"><input className={cls('minutes')} type="number" min="1" inputMode="numeric" value={f.minutes} onChange={set('minutes')} /></Field>
+        <Field label="Tanggal"><input className={cls('date')} type="date" value={f.date} onChange={set('date')} /></Field>
       </div>
-      <div className="chips">{[30, 45, 60, 90].map((m) => <button key={m} type="button" className="chip" onClick={() => setF((x) => ({ ...x, minutes: m }))}>{m} menit</button>)}</div>
-      <details className="more-fields" open={f.type === 'Sepak bola' || undefined}>
+      {!auto.has('minutes') && <div className="chips">{[30, 45, 60, 90].map((m) => <button key={m} type="button" className="chip" onClick={() => setF((x) => ({ ...x, minutes: m }))}>{m} menit</button>)}</div>}
+      <details className="more-fields" open={showMore || f.type === 'Sepak bola'} onToggle={(e) => setShowMore(e.currentTarget.open)}>
         <summary>Detail dari jam / Huawei Health (opsional)</summary>
         <div className="row2">
-          <Field label="Jarak (km)"><input inputMode="decimal" value={f.km} onChange={set('km')} placeholder="mis. 5,2" /></Field>
-          <Field label="Jam mulai"><input type="time" value={f.startTime} onChange={set('startTime')} /></Field>
+          <Field label="Jarak (km)"><input className={cls('km')} inputMode="decimal" value={f.km} onChange={set('km')} placeholder="mis. 5,2" /></Field>
+          <Field label="Jam mulai"><input className={cls('startTime')} type="time" value={f.startTime} onChange={set('startTime')} /></Field>
         </div>
         <div className="row2">
-          <Field label="❤️ Detak jantung rata-rata"><input type="number" inputMode="numeric" value={f.avgHr} onChange={set('avgHr')} placeholder="bpm" /></Field>
-          <Field label="🔥 Kalori"><input type="number" inputMode="numeric" value={f.calories} onChange={set('calories')} placeholder="kkal" /></Field>
+          <Field label="❤️ Detak jantung rata-rata"><input className={cls('avgHr')} type="number" inputMode="numeric" value={f.avgHr} onChange={set('avgHr')} placeholder="bpm" /></Field>
+          <Field label="🔥 Kalori aktif"><input className={cls('calories')} type="number" inputMode="numeric" value={f.calories} onChange={set('calories')} placeholder="kkal" /></Field>
+        </div>
+        <div className="row2">
+          <Field label="👟 Langkah"><input className={cls('steps')} type="number" inputMode="numeric" value={f.steps} onChange={set('steps')} placeholder="langkah" /></Field>
+          <span />
         </div>
       </details>
       <label className="checkbox"><input type="checkbox" checked={f.strength} onChange={(e) => setF((x) => ({ ...x, strength: e.target.checked }))} /> Termasuk latihan otot</label>
       <div className="photo-field">
         {img && <img className="workout-photo" src={img.data} alt="Pratinjau" />}
-        <PhotoPicker onPicked={setImg} label={img ? '📷 Ganti foto' : '📷 Lampirkan foto / screenshot'} />
+        <PhotoPicker onPicked={setImg} label={img ? '📷 Ganti foto' : '📷 Lampirkan foto lain'} />
       </div>
     </Modal>
+  );
+}
+
+function ScreenshotPicker({ onPicked, busy }) {
+  const ref = useRef(null);
+  return (
+    <>
+      <input ref={ref} type="file" accept="image/*" hidden onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) onPicked(file); }} />
+      <button type="button" className="btn btn-primary ocr-btn" onClick={() => ref.current.click()} disabled={busy}>
+        📸 Isi otomatis dari screenshot
+      </button>
+    </>
   );
 }
 
